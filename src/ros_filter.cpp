@@ -56,6 +56,9 @@ namespace robot_localization
 {
 using namespace std::chrono_literals;
 
+tf2::Transform last_reset_transform;
+bool has_last_reset = false;
+
 template<typename T>
 RosFilter<T>::RosFilter(const rclcpp::NodeOptions & options)
 : Node(options.arguments()[0], options),
@@ -2217,6 +2220,16 @@ void RosFilter<T>::setPoseCallback(
   measurement_covariance.setIdentity();
   measurement_covariance *= 1e-6;
 
+  tf2::Quaternion q;
+  q.setX(msg->pose.pose.orientation.x);
+  q.setY(msg->pose.pose.orientation.y);
+  q.setZ(msg->pose.pose.orientation.z);
+  q.setW(msg->pose.pose.orientation.w);
+
+  last_reset_transform.setIdentity();
+  last_reset_transform.setRotation(q);
+  has_last_reset = true;
+
   // Prepare the pose data (really just using this to transform it into the
   // target frame). Twist data is going to get zeroed out.
   preparePose(
@@ -3081,6 +3094,10 @@ bool RosFilter<T>::preparePose(
 
         tf2::Transform initial_measurement = initial_measurements_[topic_name];
         pose_tmp.setData(initial_measurement.inverseTimes(pose_tmp));
+        if (has_last_reset)
+        {
+          pose_tmp.setData(last_reset_transform.inverseTimes(pose_tmp));
+        }
       }
 
       // 7h. Apply the target frame transformation to the pose object.
